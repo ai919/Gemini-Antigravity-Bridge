@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>Gemini Antigravity Bridge</title>
+  <link rel="stylesheet" href="sidepanel.css">
+</head>
+<body>
+  <div class="app-root">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="brand-group">
+        <div class="brand-badge">
+          <svg class="brand-icon" viewBox="0 0 24 24" width="16" height="16" fill="none">
+            <path d="M13 2L3 14H12L11 22L21 10H12L13 2Z" fill="url(#bolt-gradient)" stroke="#FFD54F" stroke-width="1.2" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="bolt-gradient" x1="3" y1="2" x2="21" y2="22" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#FFE082"/>
+                <stop offset="1" stop-color="#FFB300"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <span class="brand-title">Antigravity</span>
+          <span class="brand-tag">Web Bridge</span>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="projects-drawer-btn" class="nav-btn" title="查看 Projects 项目与对话树 (像 Antigravity 一样)">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+          <span>Projects</span>
+        </button>
+        <button id="new-session-btn" class="nav-btn primary" title="在当前项目开启新任务对话">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+          <span>新对话</span>
+        </button>
+        <div class="status-badge" id="daemon-badge">
+          <span class="pulse-dot offline" id="daemon-dot"></span>
+          <span id="daemon-status">离线</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Workspace & Task Info Bar -->
+    <div class="workspace-bar">
+      <div class="ws-breadcrumb">
+        <!-- 1. Click Project: opens Projects tab -->
+        <button class="crumb-btn crumb-project" id="btn-open-projects" title="点击查看与切换本地项目">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="#90CAF9"><path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z"/></svg>
+          <span id="active-workspace-name" class="ws-name">正在连接工作区...</span>
+          <svg class="chevron-icon" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+
+        <span class="ws-sep">/</span>
+
+        <!-- 2. Click Task: opens current project's Tasks tab -->
+        <button class="crumb-btn crumb-task" id="btn-open-tasks" title="点击查看当前项目的历史任务对话">
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="#81C784"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+          <span id="current-session-label" class="ws-session">主对话 (默认)</span>
+          <svg class="chevron-icon" viewBox="0 0 24 24" width="10" height="10" fill="currentColor"><path d="M7 10l5 5 5-5z"/></svg>
+        </button>
+      </div>
+
+      <div class="ws-tools">
+        <button id="init-project-btn" class="ws-action-pill highlight" title="成熟项目首次使用：一键让 Gemini 建立全局架构认知">
+          <span>🧠 建立项目认知</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Management Drawer Modal -->
+    <div id="drawer-modal" class="drawer-modal hidden">
+      <div class="drawer-panel">
+        <div class="drawer-header">
+          <div class="drawer-header-left">
+            <div class="drawer-search-wrap">
+              <svg class="search-icon" viewBox="0 0 24 24" width="13" height="13" fill="#8b949e"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>
+              <input type="text" id="tree-search-input" class="tree-search-input" placeholder="搜索项目或对话任务..." />
+            </div>
+          </div>
+          <button id="close-drawer-btn" class="drawer-close" title="关闭 (Esc)">&times;</button>
+        </div>
+
+        <div class="drawer-split-container">
+          <!-- Left: Cascading Selection (左侧：现有项目与对应对话的分级联动选择) -->
+          <div class="drawer-cascading-area">
+            <!-- Col 1: Projects List (现有项目列表) -->
+            <div class="cascade-col cascade-projects">
+              <div class="cascade-col-header">
+                <span class="col-title">📁 Projects</span>
+                <span class="drawer-badge" id="projects-count">0</span>
+              </div>
+              <div id="cascade-projects-list" class="cascade-list"></div>
+            </div>
+
+            <!-- Col 2: Tasks List under Selected Project (选中项目下的对话列表) -->
+            <div class="cascade-col cascade-tasks">
+              <div class="cascade-col-header">
+                <span class="col-title" id="selected-project-title">💬 项目对话</span>
+                <div style="display:flex; align-items:center; gap:6px;">
+                  <button id="btn-switch-to-project" class="cascade-switch-btn hidden" title="将当前工作区切换为此项目">进入该项目</button>
+                  <span class="drawer-badge" id="tasks-count">0</span>
+                </div>
+              </div>
+              <div id="cascade-tasks-list" class="cascade-list"></div>
+            </div>
+          </div>
+
+          <!-- Right: New Creation & Actions (右侧：新建项目与对话逻辑) -->
+          <div class="drawer-actions-sidebar">
+            <div class="actions-section-title">新建逻辑</div>
+
+            <button id="pick-folder-btn" class="sidebar-action-btn primary" title="新建项目：调起系统选择本地目录或新建文件夹">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>
+              <div class="btn-text-group">
+                <span class="btn-main-label">➕ 新建项目</span>
+                <span class="btn-sub-label">选择本地目录或新建文件夹</span>
+              </div>
+            </button>
+
+            <button id="drawer-new-session-btn" class="sidebar-action-btn" title="在当前选中项目下开启新任务对话">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>
+              <div class="btn-text-group">
+                <span class="btn-main-label">💬 新建对话</span>
+                <span class="btn-sub-label">在选中项目下开启新任务</span>
+              </div>
+            </button>
+
+            <div class="sidebar-manual-box">
+              <span class="sidebar-sub-heading">手动添加本地路径:</span>
+              <div class="manual-input-group">
+                <input type="text" id="new-ws-input" class="sidebar-input" placeholder="输入路径，如 G:\code\app...">
+                <button id="add-ws-btn" class="sidebar-btn-confirm">添加</button>
+              </div>
+            </div>
+
+            <div class="sidebar-footer-hint">
+              <span>💡 左侧是现有的项目与对话，点击可直接切换；右侧用于新建项目或新建对话。</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Chat Stream View -->
+    <main class="chat-viewport" id="chat-messages"></main>
+
+    <!-- Bottom Input Deck -->
+    <footer class="input-deck">
+      <div class="deck-toolbar">
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <label class="context-switch" title="自动落盘：开启后，Gemini 产出的新建与修改文件将自动秒级写入本地磁盘并覆盖更新，无需手动点击确认">
+            <input type="checkbox" id="auto-apply" checked>
+            <span class="custom-switch"></span>
+            <span class="switch-label">⚡ 自动落盘</span>
+          </label>
+          <label class="context-switch" title="智能模式：首轮自动注入项目框架，后续对话轻量直连，杜绝重复冗余">
+            <input type="checkbox" id="attach-context" checked>
+            <span class="custom-switch"></span>
+            <span class="switch-label">上下文感知</span>
+          </label>
+        </div>
+        <span class="token-free-tag">2M 窗口 · 0 Token</span>
+      </div>
+
+      <!-- Attached Image Thumbnails Container -->
+      <div id="image-preview-container" class="image-preview-container hidden"></div>
+
+      <!-- Slash Command Skills Popup Menu -->
+      <div id="skills-popup" class="skills-popup hidden"></div>
+
+      <div class="input-container">
+        <button id="attach-img-btn" class="attach-img-btn" title="添加图片/截图 (也可直接在输入框按 Ctrl+V 粘贴)">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/>
+          </svg>
+        </button>
+        <input type="file" id="hidden-file-input" accept="image/*" multiple style="display:none">
+        <textarea id="prompt-input" placeholder="描述你的任务，支持直接 Ctrl+V 贴图... (Enter 发送)" rows="2"></textarea>
+        <button id="send-btn" class="send-action-btn" title="发送给网页版 Gemini 执行">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+          </svg>
+        </button>
+      </div>
+    </footer>
+
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>

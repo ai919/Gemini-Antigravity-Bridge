@@ -1,0 +1,74 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0b0e14" />
+      <stop offset="50%" stop-color="#161b26" />
+      <stop offset="100%" stop-color="#08090d" />
+    </linearGradient>
+
+    <!-- Gemini Astral Gradient -->
+    <linearGradient id="astralGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4E97FA" />
+      <stop offset="45%" stop-color="#9C64F8" />
+      <stop offset="80%" stop-color="#F25C75" />
+      <stop offset="100%" stop-color="#FDB44E" />
+    </linearGradient>
+
+    <!-- Energy Core Glow -->
+    <radialGradient id="coreGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#80B5FF" stop-opacity="0.9" />
+      <stop offset="40%" stop-color="#9C64F8" stop-opacity="0.4" />
+      <stop offset="100%" stop-color="#9C64F8" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Subtle Glow Filter -->
+    <filter id="neonGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="12" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="softShadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="16" stdDeviation="20" flood-color="#000000" flood-opacity="0.6"/>
+    </filter>
+  </defs>
+
+  <!-- Outer Rounded Squircle with Shadow -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bgGrad)" stroke="#2b3445" stroke-width="3" filter="url(#softShadow)" />
+
+  <!-- Background Cyber Circuit Grid Accents -->
+  <path d="M70 180 H140 L170 150 H240" stroke="#263143" stroke-width="2" fill="none" opacity="0.6" stroke-linecap="round" />
+  <path d="M442 332 H372 L342 362 H272" stroke="#263143" stroke-width="2" fill="none" opacity="0.6" stroke-linecap="round" />
+  <circle cx="240" cy="150" r="3" fill="#4E97FA" opacity="0.8" />
+  <circle cx="272" cy="362" r="3" fill="#F25C75" opacity="0.8" />
+
+  <!-- Ambient Light Pulse behind the Orb -->
+  <circle cx="256" cy="256" r="140" fill="url(#coreGlow)" />
+
+  <!-- Antigravity Astral Orbital Rings -->
+  <!-- Ring 1: Primary Ellipse -->
+  <ellipse cx="256" cy="256" rx="170" ry="64" transform="rotate(-30 256 256)" fill="none" stroke="url(#astralGrad)" stroke-width="8" stroke-linecap="round" filter="url(#neonGlow)" />
+  
+  <!-- Ring 2: Counter Ellipse with Dash -->
+  <ellipse cx="256" cy="256" rx="170" ry="64" transform="rotate(45 256 256)" fill="none" stroke="url(#astralGrad)" stroke-width="5" stroke-dasharray="24 16 8 16" stroke-linecap="round" opacity="0.8" />
+
+  <!-- Orbiting Quantum Nodes -->
+  <circle cx="118" cy="176" r="8" fill="#FFF" filter="url(#neonGlow)" />
+  <circle cx="394" cy="336" r="6" fill="#FDB44E" filter="url(#neonGlow)" />
+  <circle cx="370" cy="140" r="7" fill="#4E97FA" filter="url(#neonGlow)" />
+
+  <!-- Center Gemini Prism Diamond (Antigravity Core) -->
+  <g transform="translate(256, 256)">
+    <!-- Outer Glow Rhombus -->
+    <polygon points="0,-76 66,0 0,76 -66,0" fill="url(#astralGrad)" opacity="0.25" filter="url(#neonGlow)" />
+    
+    <!-- Primary Four-Point Celestial Star -->
+    <path d="M0 -84 C4 -24 24 -4 84 0 C24 4 4 24 0 84 C-4 24 -24 4 -84 0 C-24 -4 -4 -24 0 -84 Z" fill="url(#astralGrad)" filter="url(#neonGlow)" />
+    
+    <!-- Center Core Spark (White Glow) -->
+    <path d="M0 -42 C2 -12 12 -2 42 0 C12 2 2 12 0 42 C-2 12 -12 2 -42 0 C-12 -2 -2 -12 0 -42 Z" fill="#FFFFFF" opacity="0.95" />
+    
+    <!-- Core Center Dot -->
+    <circle cx="0" cy="0" r="5" fill="#FFFFFF" />
+  </g>
+</svg>

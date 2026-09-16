@@ -1,0 +1,12 @@
+{
+  "name": "gemini-antigravity-daemon",
+  "version": "1.0.0",
+  "description": "Local workspace daemon for Gemini Antigravity Bridge",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}
