@@ -173,43 +173,99 @@ function dataURLtoFile(dataurl, filename) {
   return new File([u8arr], filename, { type: mime });
 }
 
+function checkIsGenerating() {
+  // 1. 检查是否存在真实且可见的停止生成按钮
+  const stopSelectors = [
+    'button[aria-label*="Stop"]',
+    'button[aria-label*="停止"]',
+    'button[aria-label*="Cancel"]',
+    'button[aria-label*="取消"]',
+    'button.stop-button',
+    '[data-test-id="stop-button"]',
+    'mat-icon[data-mat-icon-name="stop"]',
+    'mat-icon[data-mat-icon-name="pause"]'
+  ];
+  for (const s of stopSelectors) {
+    const el = document.querySelector(s);
+    if (el && el.offsetParent !== null && !el.disabled) {
+      return true;
+    }
+  }
+
+  // 2. 检查发送按钮是否正处于禁用态（Gemini 输出时发送按钮必定禁用或隐藏）
+  const sendSelectors = [
+    'button[aria-label*="Send"]',
+    'button[aria-label*="发送"]',
+    'button.send-button',
+    '.send-button-container button'
+  ];
+  for (const s of sendSelectors) {
+    const el = document.querySelector(s);
+    if (el && el.offsetParent !== null) {
+      if (el.disabled) return true;
+    }
+  }
+
+  return false;
+}
+
 function startStreamingObserver() {
   if (activeObserver) clearInterval(activeObserver);
   lastCapturedText = '';
 
   let polls = 0;
+  let stableCount = 0;
+
   activeObserver = setInterval(() => {
     polls++;
-    const responseElements = document.querySelectorAll('.model-response-text, message-content, [data-test-id="model-response-text"], .response-container');
+    const responseElements = document.querySelectorAll(
+      '.model-response-text, message-content, [data-test-id="model-response-text"], .response-container, .markdown'
+    );
     if (!responseElements || responseElements.length === 0) {
-      if (polls > 150) clearInterval(activeObserver);
+      if (polls > 200) {
+        clearInterval(activeObserver);
+        activeObserver = null;
+      }
       return;
     }
 
     const latest = responseElements[responseElements.length - 1];
-    const isGenerating = !!document.querySelector('button[aria-label*="Stop"], button[aria-label*="停止"], .generating, [aria-label*="Cancel"]');
+    const isGen = checkIsGenerating();
     
-    let text = latest.innerText || latest.textContent || '';
+    let text = (latest.innerText || latest.textContent || '').trim();
     
     const codeBlocks = [];
-    latest.querySelectorAll('pre, code-block, pre code').forEach(codeEl => {
-      const codeTxt = codeEl.innerText.trim();
+    latest.querySelectorAll('pre, code-block, pre code, .code-block').forEach(codeEl => {
+      const codeTxt = (codeEl.innerText || codeEl.textContent || '').trim();
       if (codeTxt) codeBlocks.push(codeTxt);
     });
 
     if (text && text !== lastCapturedText) {
       lastCapturedText = text;
+      stableCount = 0; // 重置稳定计数器（正在输出中，绝不中断）
+
       chrome.runtime.sendMessage({
         type: 'STREAM_CHUNK_FROM_GEMINI',
         text: text,
         codeBlocks: codeBlocks,
         currentUrl: window.location.href,
-        isDone: !isGenerating
+        isDone: false
       }, () => { if (chrome.runtime.lastError) {} });
+    } else if (text.length > 0) {
+      // 文本没有变化，增加静默稳定计数
+      stableCount++;
     }
 
-    if (!isGenerating && text.length > 0 && polls > 4) {
+    // 判定完成条件：
+    // 1. 发送按钮已恢复可用，且无停止按钮 (isGen === false)
+    // 2. 文本连续 3 次轮询（1.2 秒）无任何新增字符变化
+    // 3. 至少轮询过 5 次
+    // 4. 内容非空
+    if (!isGen && stableCount >= 3 && text.length > 0 && polls >= 5) {
       clearInterval(activeObserver);
+      activeObserver = null;
+      console.log('[Gemini-Bridge] Generation completed cleanly! Total length:', text.length);
+
       chrome.runtime.sendMessage({
         type: 'STREAM_CHUNK_FROM_GEMINI',
         text: text,
@@ -218,5 +274,30 @@ function startStreamingObserver() {
         isDone: true
       }, () => { if (chrome.runtime.lastError) {} });
     }
+
+    // 超时兜底（单次任务超过 15 分钟）
+    if (polls > 2250) {
+      clearInterval(activeObserver);
+      activeObserver = null;
+    }
+  }, 400);
+}
+
+// 全局被动监听：当用户在 Gemini 网页端直接点击或发送消息时，自动感知并同步到侧边栏
+let globalObserverTimer = null;
+const globalMutationWatcher = new MutationObserver(() => {
+  if (globalObserverTimer) return;
+  globalObserverTimer = setTimeout(() => {
+    globalObserverTimer = null;
+    if (checkIsGenerating() && !activeObserver) {
+      console.log('[Gemini-Bridge] Detected Gemini generation in progress from web tab, activating observer...');
+      startStreamingObserver();
+    }
   }, 300);
+});
+
+try {
+  globalMutationWatcher.observe(document.body, { childList: true, subtree: true });
+} catch (e) {
+  console.warn('[Gemini-Bridge] Could not start global mutation watcher:', e);
 }

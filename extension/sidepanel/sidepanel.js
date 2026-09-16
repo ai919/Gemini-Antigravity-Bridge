@@ -819,7 +819,7 @@ function renderBubbleContent(container, text, codeBlocks) {
     let cleanCode = rawCode
       .replace(/^```[a-zA-Z]*\n?/, '')
       .replace(/\n?```$/, '')
-      .replace(/^(?:javascript|js|typescript|ts|python|py)\s*\n?/i, '')
+      .replace(/^(?:javascript|js|typescript|ts|python|py|markdown|md|json|html|css|yaml|yml|sh|bash)\s*\n?/i, '')
       .trim();
 
     if (!cleanCode) continue;
@@ -834,20 +834,28 @@ function renderBubbleContent(container, text, codeBlocks) {
     });
   }
 
-  // 2. Extract FILE diff blocks
-  const diffRegex = /(?:^|\n)FILE:\s*([^\r\n]+)\s*\n[\s\S]*?<{7}\s*SEARCH[\s\S]*?={7}[\s\S]*?>{7}/g;
+  // 2. Extract FILE diff blocks (Tolerant to 2~8 brackets, optional SEARCH/REPLACE keywords, optional code fences)
+  const diffRegex = /(?:^|\n)FILE:\s*([^\r\n]+)[\s\S]*?<={0,1}<{2,8}\s*(?:SEARCH)?\r?\n([\s\S]*?)\r?\n={3,8}\r?\n([\s\S]*?)\r?\n>{3,8}(?:\s*REPLACE)?/gi;
   let diffMatch;
   while ((diffMatch = diffRegex.exec(text)) !== null) {
     const rawFileName = diffMatch[1].trim();
     if (!isValidFilePath(rawFileName)) continue;
 
-    const diffBlock = diffMatch[0].trim();
+    let searchContent = diffMatch[2];
+    let replaceContent = diffMatch[3];
+
+    // Clean any markdown code fences if wrapped inside
+    searchContent = searchContent.replace(/^```[\w]*\r?\n/, '').replace(/\r?\n```$/, '');
+    replaceContent = replaceContent.replace(/^```[\w]*\r?\n/, '').replace(/\r?\n```$/, '');
+
+    const standardPatch = `FILE: ${rawFileName}\n<<<<<<< SEARCH\n${searchContent}\n=======\n${replaceContent}\n>>>>>>> REPLACE`;
+
     cards.push({
       type: 'diff',
       fileName: rawFileName,
-      patchText: diffBlock,
+      patchText: standardPatch,
       fullMatch: diffMatch[0],
-      diff: diffBlock
+      diff: standardPatch
     });
   }
 
@@ -875,7 +883,7 @@ function renderBubbleContent(container, text, codeBlocks) {
     container.appendChild(textEl);
   }
 
-  // 5. Render action diff/create cards
+  // 5. Render diff & new-file cards
   for (const card of cards) {
     const cardEl = document.createElement('div');
     cardEl.className = 'diff-card';
@@ -933,8 +941,8 @@ function renderBubbleContent(container, text, codeBlocks) {
 }
 
 function triggerAutoApply() {
-  if (!currentTurnAssistantBubble) return;
-  const unappliedBtns = currentTurnAssistantBubble.querySelectorAll('.apply-btn:not([disabled])');
+  const container = currentTurnAssistantBubble || chatMessages;
+  const unappliedBtns = container.querySelectorAll('.diff-card .apply-btn:not([disabled]):not(.success)');
   if (unappliedBtns.length > 0) {
     console.log(`[Sidepanel] Auto-applying ${unappliedBtns.length} code diffs/files to disk...`);
     unappliedBtns.forEach((btn, idx) => {
@@ -1250,40 +1258,34 @@ sendBtn.addEventListener('click', () => {
   let userDisplayText = text || '【发送了截图/图片】';
   let fullPrompt = text || '请仔细分析所上传的图片并给出处理建议/代码实现。';
   
-  // Check if user is invoking a skill via slash command, e.g. `/doin-cehua ...`
-  const skillMatch = text.match(/^\/([a-zA-Z0-9_\-\u4e00-\u9fa5]+)(?:\s+([\s\S]*))?$/);
-  if (skillMatch) {
-    const invoked = skillMatch[1].toLowerCase();
-    const promptRemainder = (skillMatch[2] || '').trim();
-    const matchedSkill = availableSkills.find(s => 
-      s.name.toLowerCase() === invoked || s.id.toLowerCase() === invoked
-    );
-
-    if (matchedSkill) {
-      userDisplayText = `[⚡ 技能: /${matchedSkill.name}]\n` + (promptRemainder || '按技能规范执行');
-      fullPrompt = [
-        `【系统已加载并激活本地专属技能: /${matchedSkill.name} (${matchedSkill.id})】`,
-        `【技能执行规范与 System Instruction】:`,
-        matchedSkill.instruction,
-        '',
-        '【用户具体需求与任务输入】:',
-        promptRemainder || '请严格按照本技能的工作流与产出规范开始执行。'
-      ].join('\n');
-    }
-  }
+  // 直接透传 /skillname 原生指令到 Gemini 网页端，不进行任何本地 Prompt 劫持与替换
+  const isSlashCmd = text.startsWith('/');
 
   if (attachContextCheckbox.checked && cachedContext && isFirstTurn) {
-    fullPrompt = [
-      '【系统工作区全量代码上下文 (Repomix XML)】:',
-      cachedContext,
-      '',
-      '【用户任务与指令】:',
-      fullPrompt,
-      '',
-      '【输出规范】: 若需新建文件，请务必以独立行 FILE_NEW: 相对路径 开头并包含代码块；若修改现有代码，以 FILE: 相对路径 及 SEARCH/REPLACE 语法块输出；终端命令用 ```bash 块包裹。'
-    ].join('\n');
-  } else if (!skillMatch) {
-    // Check if the user's prompt is an actual coding/task instruction
+    if (isSlashCmd) {
+      // 保持 /skillname 位于首行首位，以确保被 Gemini 网页端解析为原生指令
+      fullPrompt = [
+        text,
+        '',
+        '---',
+        '【系统工作区全量代码上下文 (Repomix XML)】:',
+        cachedContext,
+        '',
+        '【输出规范】: 若需新建文件，请务必以独立行 FILE_NEW: 相对路径 开头并包含代码块；若修改现有代码，以 FILE: 相对路径 及 SEARCH/REPLACE 语法块输出；终端命令用 ```bash 块包裹。'
+      ].join('\n');
+    } else {
+      fullPrompt = [
+        '【系统工作区全量代码上下文 (Repomix XML)】:',
+        cachedContext,
+        '',
+        '【用户任务与指令】:',
+        fullPrompt,
+        '',
+        '【输出规范】: 若需新建文件，请务必以独立行 FILE_NEW: 相对路径 开头并包含代码块；若修改现有代码，以 FILE: 相对路径 及 SEARCH/REPLACE 语法块输出；终端命令用 ```bash 块包裹。'
+      ].join('\n');
+    }
+  } else if (!isSlashCmd) {
+    // 普通编码任务输出规范（若为 / 开头的技能指令则不追加，由在线技能自身规范接管）
     const isCodingTask = /写|改|创|新建|实现|修复|运行|代码|脚本|文件|add|fix|create|update|generate|make|build/i.test(text);
     if (isCodingTask) {
       fullPrompt = [
