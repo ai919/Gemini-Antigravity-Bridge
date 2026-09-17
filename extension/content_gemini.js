@@ -242,6 +242,34 @@ function extractCleanGeminiText(rootEl) {
   }
 }
 
+function isContextValid() {
+  try {
+    return Boolean(chrome.runtime && chrome.runtime.id);
+  } catch (e) {
+    return false;
+  }
+}
+
+function safeSendMessage(msg) {
+  if (!isContextValid()) {
+    if (activeObserver) {
+      clearInterval(activeObserver);
+      activeObserver = null;
+    }
+    return;
+  }
+  try {
+    chrome.runtime.sendMessage(msg, () => {
+      if (chrome.runtime.lastError) {}
+    });
+  } catch (err) {
+    if (activeObserver) {
+      clearInterval(activeObserver);
+      activeObserver = null;
+    }
+  }
+}
+
 function startStreamingObserver() {
   if (activeObserver) clearInterval(activeObserver);
   lastCapturedText = '';
@@ -250,6 +278,13 @@ function startStreamingObserver() {
   let stableCount = 0;
 
   activeObserver = setInterval(() => {
+    if (!isContextValid()) {
+      if (activeObserver) clearInterval(activeObserver);
+      activeObserver = null;
+      try { globalMutationWatcher.disconnect(); } catch (e) {}
+      return;
+    }
+
     polls++;
     const responseElements = document.querySelectorAll(
       '.model-response-text, message-content, [data-test-id="model-response-text"], .response-container, .markdown'
@@ -277,13 +312,13 @@ function startStreamingObserver() {
       lastCapturedText = text;
       stableCount = 0; // 重置稳定计数器（正在输出中，绝不中断）
 
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         type: 'STREAM_CHUNK_FROM_GEMINI',
         text: text,
         codeBlocks: codeBlocks,
         currentUrl: window.location.href,
         isDone: false
-      }, () => { if (chrome.runtime.lastError) {} });
+      });
     } else if (text.length > 0) {
       // 文本没有变化，增加静默稳定计数
       stableCount++;
@@ -299,13 +334,13 @@ function startStreamingObserver() {
       activeObserver = null;
       console.log('[Gemini-Bridge] Generation completed cleanly! Total length:', text.length);
 
-      chrome.runtime.sendMessage({
+      safeSendMessage({
         type: 'STREAM_CHUNK_FROM_GEMINI',
         text: text,
         codeBlocks: codeBlocks,
         currentUrl: window.location.href,
         isDone: true
-      }, () => { if (chrome.runtime.lastError) {} });
+      });
     }
 
     // 超时兜底（单次任务超过 15 分钟）
@@ -319,9 +354,14 @@ function startStreamingObserver() {
 // 全局被动监听：当用户在 Gemini 网页端直接点击或发送消息时，自动感知并同步到侧边栏
 let globalObserverTimer = null;
 const globalMutationWatcher = new MutationObserver(() => {
+  if (!isContextValid()) {
+    try { globalMutationWatcher.disconnect(); } catch (e) {}
+    return;
+  }
   if (globalObserverTimer) return;
   globalObserverTimer = setTimeout(() => {
     globalObserverTimer = null;
+    if (!isContextValid()) return;
     if (checkIsGenerating() && !activeObserver) {
       console.log('[Gemini-Bridge] Detected Gemini generation in progress from web tab, activating observer...');
       startStreamingObserver();
