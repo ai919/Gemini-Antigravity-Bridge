@@ -900,25 +900,38 @@ function renderBubbleContent(container, text, codeBlocks) {
   container.innerHTML = '';
   if (!text) return;
 
+  // Pre-clean glued code block headers (e.g. .mdMarkdown#, .mdMarkdown<<<<)
+  let normalizedText = (text || '')
+    .replace(/(\.[\w]{1,10})\s*(?:Markdown|markdown|JSON|json|Python|python|JavaScript|javascript|TypeScript|typescript|html|HTML|css|CSS|bash|sh|yaml|yml)(?=\s*[#<>\r\n])/g, '$1\n')
+    .replace(/(\.[\w]{1,10})Markdown(?=[^\w\s])/gi, '$1\n');
+
   const cards = [];
 
-  function isValidFilePath(p) {
-    if (!p) return false;
+  function extractCleanFilePath(p) {
+    if (!p) return null;
     const trimmed = p.trim();
-    if (trimmed.includes('<') || trimmed.includes('>') || trimmed.includes(' ') || trimmed.includes('：')) return false;
-    if (['path', 'filename', 'filepath', 'some_file', 'your_file'].includes(trimmed.toLowerCase())) return false;
-    if (!/^[\w\-\.\/\\@]+$/.test(trimmed)) return false;
-    return trimmed.length >= 2 && trimmed.includes('.');
+    // Tolerantly capture valid path e.g. path/to/file.ext even if followed by glued Markdown or #
+    const m = trimmed.match(/^([a-zA-Z0-9_\-\.\/\\@]+\.[a-zA-Z0-9_]{1,10})/);
+    if (m && m[1]) {
+      const candidate = m[1];
+      if (['path', 'filename', 'filepath', 'some_file', 'your_file'].includes(candidate.toLowerCase())) return null;
+      return candidate;
+    }
+    return null;
   }
 
-  // 1. Extract FILE_NEW blocks
-  const fileNewRegex = /(?:^|\n)(?:FILE_NEW|FILE_CREATE):\s*([^\r\n]+)\s*\n([\s\S]*?)(?=(?:\n(?:FILE_NEW|FILE_CREATE|FILE):|运行此脚本|终端命令|$))/g;
+  // 1. Extract FILE_NEW blocks (tolerant to missing newlines before content)
+  const fileNewRegex = /(?:^|\n)(?:FILE_NEW|FILE_CREATE):\s*([^\r\n]+)(?:[ \t]*\n|(?=[#`]))([\s\S]*?)(?=(?:\n(?:FILE_NEW|FILE_CREATE|FILE):|运行此脚本|终端命令|$))/g;
   let fnMatch;
-  while ((fnMatch = fileNewRegex.exec(text)) !== null) {
-    const rawFileName = fnMatch[1].trim();
-    if (!isValidFilePath(rawFileName)) continue;
+  while ((fnMatch = fileNewRegex.exec(normalizedText)) !== null) {
+    const rawTarget = fnMatch[1].trim();
+    const rawFileName = extractCleanFilePath(rawTarget);
+    if (!rawFileName) continue;
 
-    let rawCode = fnMatch[2].trim();
+    // Handle any glued text after filename on the first line
+    let extraHeader = rawTarget.slice(rawFileName.length).replace(/^(?:Markdown|markdown|JSON|json|Python|python|JavaScript|javascript)/i, '').trim();
+    let rawCode = (extraHeader ? extraHeader + '\n' : '') + fnMatch[2].trim();
+
     let cleanCode = rawCode
       .replace(/^```[a-zA-Z]*\n?/, '')
       .replace(/\n?```$/, '')
@@ -940,9 +953,10 @@ function renderBubbleContent(container, text, codeBlocks) {
   // 2. Extract FILE diff blocks (Tolerant to 2~8 brackets, optional SEARCH/REPLACE keywords, optional code fences)
   const diffRegex = /(?:^|\n)FILE:\s*([^\r\n]+)[\s\S]*?<={0,1}<{2,8}\s*(?:SEARCH)?\r?\n([\s\S]*?)\r?\n={3,8}\r?\n([\s\S]*?)\r?\n>{3,8}(?:\s*REPLACE)?/gi;
   let diffMatch;
-  while ((diffMatch = diffRegex.exec(text)) !== null) {
-    const rawFileName = diffMatch[1].trim();
-    if (!isValidFilePath(rawFileName)) continue;
+  while ((diffMatch = diffRegex.exec(normalizedText)) !== null) {
+    const rawTarget = diffMatch[1].trim();
+    const rawFileName = extractCleanFilePath(rawTarget);
+    if (!rawFileName) continue;
 
     let searchContent = diffMatch[2];
     let replaceContent = diffMatch[3];
