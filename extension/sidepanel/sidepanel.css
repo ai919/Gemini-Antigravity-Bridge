@@ -301,6 +301,25 @@ body {
   white-space: nowrap;
 }
 
+.crumb-edit-btn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.5;
+  transition: all 0.15s;
+  color: #8b949e;
+  line-height: 1;
+}
+
+.crumb-edit-btn:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.12);
+  color: #58a6ff;
+}
+
 .ws-sep {
   color: var(--text-muted);
   font-size: 11px;
@@ -557,6 +576,26 @@ body {
   color: #6e7681;
   font-family: var(--font-mono);
   flex-shrink: 0;
+}
+
+.cascade-task-item .task-edit-btn {
+  background: transparent;
+  border: none;
+  font-size: 11px;
+  opacity: 0;
+  cursor: pointer;
+  padding: 1px 4px;
+  border-radius: 3px;
+  transition: all 0.15s;
+}
+
+.cascade-task-item:hover .task-edit-btn {
+  opacity: 0.6;
+}
+
+.cascade-task-item .task-edit-btn:hover {
+  opacity: 1 !important;
+  background: rgba(56, 139, 253, 0.2);
 }
 
 .cascade-task-item .task-del-btn {

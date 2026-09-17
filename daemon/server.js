@@ -299,9 +299,11 @@ wss.on('connection', (ws) => {
 
         case 'SAVE_SESSION':
           if (data.session) {
-            saveSessionToDisk(patcher.workspaceDir, data.session);
+            const targetWs = data.workspace || patcher.workspaceDir;
+            saveSessionToDisk(targetWs, data.session);
             ws.send(JSON.stringify({
               type: 'SESSION_SAVED',
+              workspace: targetWs,
               id: data.session.id,
               success: true
             }));

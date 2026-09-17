@@ -36,6 +36,7 @@ let collapsedProjects = {};
 let selectedDrawerProjectPath = null;
 
 const currentSessionLabel = document.getElementById('current-session-label');
+const btnRenameCurrentSession = document.getElementById('btn-rename-current-session');
 const newSessionBtn = document.getElementById('new-session-btn');
 const newWsInput = document.getElementById('new-ws-input');
 const addWsBtn = document.getElementById('add-ws-btn');
@@ -183,6 +184,22 @@ btnOpenProjects.addEventListener('click', () => openDrawer('projects'));
 btnOpenTasks.addEventListener('click', () => openDrawer('tasks'));
 if (projectsDrawerBtn) {
   projectsDrawerBtn.addEventListener('click', () => openDrawer('projects'));
+}
+if (btnRenameCurrentSession) {
+  btnRenameCurrentSession.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (!currentSessionId || !projectSessions[currentSessionId]) return;
+    const currentTitle = projectSessions[currentSessionId].title || '主对话';
+    renameSessionInProject(currentWorkspace, currentSessionId, currentTitle);
+  });
+}
+if (currentSessionLabel) {
+  currentSessionLabel.addEventListener('dblclick', (e) => {
+    e.stopPropagation();
+    if (!currentSessionId || !projectSessions[currentSessionId]) return;
+    const currentTitle = projectSessions[currentSessionId].title || '主对话';
+    renameSessionInProject(currentWorkspace, currentSessionId, currentTitle);
+  });
 }
 closeDrawerBtn.addEventListener('click', closeDrawer);
 
@@ -410,10 +427,16 @@ function renderCascadingProjectsAndTasks(filterQuery = '') {
         <span class="task-dot">●</span>
         <span class="task-title" title="${escapeHtml(sess.title || '无标题任务')}">${escapeHtml(sess.title || '无标题任务')}</span>
         <span class="task-time">${escapeHtml(relTime)}</span>
+        <button class="task-edit-btn" title="修改任务名称 (Rename)">✏️</button>
         <button class="task-del-btn" title="删除此任务">🗑️</button>
       `;
 
       tItem.addEventListener('click', (e) => {
+        if (e.target.closest('.task-edit-btn')) {
+          e.stopPropagation();
+          renameSessionInProject(selectedDrawerProjectPath, sess.id, sess.title);
+          return;
+        }
         if (e.target.closest('.task-del-btn')) {
           e.stopPropagation();
           deleteSessionFromProject(selectedDrawerProjectPath, sess.id, sess.title);
@@ -460,6 +483,44 @@ function removeProjectFromRecent(wsPath) {
   recentWorkspaces = recentWorkspaces.filter(p => !pathEquals(p, wsPath));
   chrome.storage.local.set({ recent_workspaces: recentWorkspaces });
   requestWorkspacesTree();
+}
+
+// Rename session in project disk
+function renameSessionInProject(wsPath, sessionId, currentTitle) {
+  const newTitle = prompt('请输入新的任务/对话名称：', currentTitle || '');
+  if (!newTitle || newTitle.trim() === '' || newTitle.trim() === currentTitle) return;
+
+  const trimmed = newTitle.trim();
+  const isCurrentWs = pathEquals(wsPath, currentWorkspace);
+
+  if (isCurrentWs && projectSessions[sessionId]) {
+    projectSessions[sessionId].title = trimmed;
+    projectSessions[sessionId].updatedAt = Date.now();
+    saveSessionById(sessionId);
+
+    // If currently active session was renamed, update top breadcrumb bar immediately
+    if (sessionId === currentSessionId && currentSessionLabel) {
+      currentSessionLabel.innerText = trimmed.length > 8 ? trimmed.slice(0, 8) + '..' : trimmed;
+      currentSessionLabel.title = trimmed;
+    }
+  } else {
+    // If from other project in tree
+    const targetProject = projectsTreeData.find(p => pathEquals(p.path, wsPath));
+    if (targetProject && targetProject.sessions && targetProject.sessions[sessionId]) {
+      targetProject.sessions[sessionId].title = trimmed;
+      targetProject.sessions[sessionId].updatedAt = Date.now();
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'SAVE_SESSION',
+          workspace: wsPath,
+          session: targetProject.sessions[sessionId]
+        }));
+      }
+    }
+  }
+
+  // Re-render drawer content to reflect changes
+  renderCascadingProjectsAndTasks(treeSearchInput ? treeSearchInput.value : '');
 }
 
 // Delete session from project disk
