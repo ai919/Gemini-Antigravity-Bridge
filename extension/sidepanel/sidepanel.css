@@ -1154,6 +1154,24 @@ body {
   background: #238636;
 }
 
+.action-btn.danger {
+  background: #da3633;
+}
+
+.action-btn.danger:hover {
+  background: #f85149;
+  box-shadow: 0 2px 8px rgba(248, 81, 73, 0.4);
+}
+
+.action-btn.warning {
+  background: #d29922;
+}
+
+.action-btn.warning:hover {
+  background: #e3b341;
+  box-shadow: 0 2px 8px rgba(227, 179, 65, 0.4);
+}
+
 .action-btn.command-btn {
   background: #21262d;
   color: #e6edf3;

@@ -358,8 +358,8 @@ wss.on('connection', (ws) => {
           break;
 
         case 'APPLY_DIFF':
-          console.log('[Daemon] Applying code patch...');
-          const results = patcher.applyDiff(data.patch);
+          console.log('[Daemon] Applying code patch (force=' + !!data.force + ')...');
+          const results = patcher.applyDiff(data.patch, !!data.force);
           ws.send(JSON.stringify({
             type: 'DIFF_APPLIED',
             results: results

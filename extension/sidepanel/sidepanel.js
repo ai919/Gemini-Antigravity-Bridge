@@ -975,26 +975,67 @@ function handleDiffAppliedResponse(results) {
     const matchingCards = document.querySelectorAll(`.diff-card[data-file="${escapeHtml(item.file)}"]`);
     matchingCards.forEach(card => {
       const btn = card.querySelector('.apply-btn');
-      if (btn) {
-        btn.disabled = true;
-        if (item.success) {
+      const actions = card.querySelector('.diff-actions');
+      let forceBtn = card.querySelector('.force-apply-btn');
+      let errorNotice = card.querySelector('.diff-error-notice');
+
+      if (item.success) {
+        if (btn) {
+          btn.disabled = true;
           btn.className = 'action-btn success bound';
-          btn.innerText = '✅ 已成功自动落盘 (' + (item.action || 'OK') + ')';
-        } else {
-          btn.className = 'action-btn danger bound';
-          btn.innerText = '❌ 落盘失败: ' + item.error;
+          btn.innerText = '✅ 已成功落盘 (' + (item.action || item.method || 'OK') + ')';
         }
+        if (forceBtn) forceBtn.remove();
+        if (errorNotice) errorNotice.remove();
+      } else {
+        // 自动落盘或手动尝试未匹配：保持可点击，并同时提供手动重试与强制覆盖两个操作
+        if (btn) {
+          btn.disabled = false;
+          btn.className = 'action-btn warning bound';
+          btn.innerText = '🔄 重试匹配';
+        }
+
+        // 提供「⚡ 强制覆盖写入」按钮
+        if (!forceBtn && actions) {
+          forceBtn = document.createElement('button');
+          forceBtn.className = 'action-btn danger force-apply-btn bound';
+          forceBtn.style.marginLeft = '8px';
+          forceBtn.innerText = '⚡ 强制覆盖写入 (Force Apply)';
+          forceBtn.title = '跳过严格上下文搜索，直接将该文件内容/章节覆盖写入磁盘（附带自动备份）';
+          forceBtn.addEventListener('click', () => {
+            forceBtn.disabled = true;
+            forceBtn.innerText = '正在强制写入...';
+            if (btn) btn.disabled = true;
+            const patchText = card.getAttribute('data-patch');
+            ws.send(JSON.stringify({ type: 'APPLY_DIFF', patch: patchText, force: true }));
+            window.lastClickedApplyBtn = forceBtn;
+          });
+          actions.appendChild(forceBtn);
+        } else if (forceBtn) {
+          forceBtn.disabled = false;
+          forceBtn.innerText = '⚡ 强制覆盖写入 (Force Apply)';
+        }
+
+        // 呈现醒目的错误原因与引导说明
+        if (!errorNotice) {
+          errorNotice = document.createElement('div');
+          errorNotice.className = 'diff-error-notice';
+          errorNotice.style.cssText = 'color:#f85149; font-size:11.5px; margin-top:8px; padding:6px 10px; background:rgba(248,81,73,0.12); border-radius:5px; border:1px solid rgba(248,81,73,0.25); line-height:1.4;';
+          card.appendChild(errorNotice);
+        }
+        errorNotice.innerHTML = `⚠️ <b>自动匹配未找到目标位置</b>: ${escapeHtml(item.error)}<br><span style="color:#8b949e;font-size:10.5px;">您可以点击「重试匹配」或直接点击右侧红色的「⚡ 强制覆盖写入」强制落盘。</span>`;
       }
     });
   }
 
-  if (window.lastClickedApplyBtn && !window.lastClickedApplyBtn.classList.contains('success')) {
+  if (window.lastClickedApplyBtn) {
     const item = results[0];
-    if (item.success) {
+    if (item && item.success) {
       window.lastClickedApplyBtn.className = 'action-btn success bound';
-      window.lastClickedApplyBtn.innerText = '✅ 已成功落盘 (' + (item.action || 'OK') + ')';
-    } else {
-      window.lastClickedApplyBtn.innerText = '❌ 失败: ' + item.error;
+      window.lastClickedApplyBtn.innerText = '✅ 已成功落盘 (' + (item.action || item.method || 'OK') + ')';
+      window.lastClickedApplyBtn.disabled = true;
+    } else if (item && !item.success) {
+      window.lastClickedApplyBtn.disabled = false;
     }
   }
 }

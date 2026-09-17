@@ -33,7 +33,7 @@ class Patcher {
     return (str || '').replace(/\r\n/g, '\n');
   }
 
-  applyDiff(patchText) {
+  applyDiff(patchText, force = false) {
     const results = [];
     const normalizedPatch = this.normalizeLineEndings(patchText);
 
@@ -94,7 +94,7 @@ class Patcher {
 
       try {
         const fileContent = this.normalizeLineEndings(fs.readFileSync(fullPath, 'utf8'));
-        const patchRes = this.smartApplyPatch(fileContent, searchBlock, replaceBlock);
+        const patchRes = this.smartApplyPatch(fileContent, searchBlock, replaceBlock, force);
         if (patchRes.success) {
           this.backupFile(fullPath);
           fs.writeFileSync(fullPath, patchRes.result + '\n', 'utf8');
@@ -112,7 +112,55 @@ class Patcher {
     return results;
   }
 
-  smartApplyPatch(fileContent, searchBlock, replaceBlock) {
+  normalizeHeader(h) {
+    return (h || '')
+      .replace(/^#+\s*/, '')
+      .replace(/^[0-9一二三四五六七八九十]+[\.、\s]*/, '')
+      .replace(/[\(（].*?[\)）]/g, '')
+      .replace(/\s+/g, '')
+      .trim();
+  }
+
+  matchHeaders(h1, h2) {
+    const c1 = this.normalizeHeader(h1);
+    const c2 = this.normalizeHeader(h2);
+    if (!c1 || !c2) return false;
+    if (c1 === c2) return true;
+    if (c1.includes(c2) || c2.includes(c1)) return true;
+    const keywords = ['细摘要', '滚动', '即时状态', '场上状态', '活跃角色', '空间锚点', '大事件', '看板', '人物状态'];
+    for (const kw of keywords) {
+      if (c1.includes(kw) && c2.includes(kw)) return true;
+    }
+    return false;
+  }
+
+  parseMarkdownSections(text) {
+    const lines = text.split('\n');
+    const sections = [];
+    let currentHeader = null;
+    let currentLines = [];
+
+    for (const line of lines) {
+      const match = line.match(/^(#{1,4})\s+(.+)/);
+      if (match) {
+        if (currentHeader) {
+          sections.push({ header: currentHeader, lines: currentLines, fullText: [currentHeader, ...currentLines].join('\n') });
+        }
+        currentHeader = line;
+        currentLines = [];
+      } else {
+        if (currentHeader) {
+          currentLines.push(line);
+        }
+      }
+    }
+    if (currentHeader) {
+      sections.push({ header: currentHeader, lines: currentLines, fullText: [currentHeader, ...currentLines].join('\n') });
+    }
+    return sections;
+  }
+
+  smartApplyPatch(fileContent, searchBlock, replaceBlock, force = false) {
     const normalize = (s) => (s || '').replace(/\r\n/g, '\n');
     const content = normalize(fileContent);
     const search = normalize(searchBlock).trim();
@@ -166,24 +214,39 @@ class Patcher {
       }
     }
 
-    // Tier 4: Section Header Anchor match
-    const headerMatch = search.match(/^(#{1,4}\s+[^\r\n]+)/m) || replace.match(/^(#{1,4}\s+[^\r\n]+)/m);
-    if (headerMatch) {
-      const targetHeader = headerMatch[1].trim();
-      const headerIdx = fileLines.findIndex(l => l.trim() === targetHeader || l.trim().includes(targetHeader.replace(/^#+\s*/, '')));
-      if (headerIdx !== -1) {
-        const level = (targetHeader.match(/^#+/) || ['#'])[0].length;
-        let nextHeaderIdx = fileLines.length;
-        for (let i = headerIdx + 1; i < fileLines.length; i++) {
-          const match = fileLines[i].match(/^(#{1,4})\s+/);
-          if (match && match[1].length <= level) {
-            nextHeaderIdx = i;
+    // Tier 4: Semantic Markdown Section match (Multi-section support)
+    const replaceSections = this.parseMarkdownSections(replace);
+    if (replaceSections.length > 0) {
+      const copy = [...fileLines];
+      let replacedCount = 0;
+
+      for (const sec of replaceSections) {
+        let targetIdx = -1;
+        for (let i = 0; i < copy.length; i++) {
+          const line = copy[i];
+          if (/^#{1,4}\s+/.test(line) && this.matchHeaders(line, sec.header)) {
+            targetIdx = i;
             break;
           }
         }
-        const copy = [...fileLines];
-        copy.splice(headerIdx, nextHeaderIdx - headerIdx, replace);
-        return { success: true, method: 'section_header', result: copy.join('\n') };
+
+        if (targetIdx !== -1) {
+          const headerLevel = (copy[targetIdx].match(/^#+/) || ['#'])[0].length;
+          let endIdx = copy.length;
+          for (let j = targetIdx + 1; j < copy.length; j++) {
+            const nextMatch = copy[j].match(/^(#{1,4})\s+/);
+            if (nextMatch && nextMatch[1].length <= headerLevel) {
+              endIdx = j;
+              break;
+            }
+          }
+          copy.splice(targetIdx, endIdx - targetIdx, sec.fullText.trimEnd());
+          replacedCount++;
+        }
+      }
+
+      if (replacedCount > 0) {
+        return { success: true, method: `semantic_sections_${replacedCount}`, result: copy.join('\n') };
       }
     }
 
@@ -213,11 +276,24 @@ class Patcher {
         }
       }
 
-      if (bestScore >= 0.5 && bestIdx !== -1) {
+      if (bestScore >= 0.4 && bestIdx !== -1) {
         const copy = [...fileLines];
         copy.splice(bestIdx, bestSpan, replace);
         return { success: true, method: `fuzzy_overlap_${Math.round(bestScore * 100)}%`, result: copy.join('\n') };
       }
+    }
+
+    // Tier 6: Force Mode (When user explicitly clicks Force Apply)
+    if (force) {
+      // 1. If replaceBlock contains top level header (# Header) or target file is short, overwrite entire file
+      if (/^#\s+/.test(replace) || fileLines.length <= 40) {
+        return { success: true, method: 'force_overwrite', result: replace };
+      }
+
+      // 2. Append replaceBlock to the end of the file with clear divider
+      const copy = [...fileLines];
+      copy.push('\n' + replace);
+      return { success: true, method: 'force_append', result: copy.join('\n') };
     }
 
     return { success: false, error: 'SEARCH block could not be located in file' };
