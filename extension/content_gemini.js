@@ -1,9 +1,21 @@
+(() => {
+if (window.__GEMINI_BRIDGE_INITIALIZED__) {
+  console.log('[Gemini-Bridge] Content script already initialized in this world');
+  return;
+}
+window.__GEMINI_BRIDGE_INITIALIZED__ = true;
+
 console.log('[Gemini-Bridge] Content script active with SPA navigation support');
 
 let activeObserver = null;
 let lastCapturedText = '';
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.type === 'PING') {
+    sendResponse({ pong: true, url: window.location.href });
+    return true;
+  }
+
   if (request.type === 'INPUT_PROMPT') {
     handleInputPrompt(request.prompt, request.images || [])
       .then(() => sendResponse({ success: true, currentUrl: window.location.href }))
@@ -301,3 +313,4 @@ try {
 } catch (e) {
   console.warn('[Gemini-Bridge] Could not start global mutation watcher:', e);
 }
+})();

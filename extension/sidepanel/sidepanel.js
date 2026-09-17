@@ -1235,7 +1235,8 @@ function dispatchPromptToGemini(fullPrompt, displayUserText, images = []) {
     if (!response || !response.success) {
       sendBtn.disabled = false;
       const errEl = createMessageElement('system');
-      errEl.innerHTML = '⚠️ <strong>发送失败</strong>：' + (response ? response.error : '未能触达页面');
+      const errText = (response && (response.message || response.error)) ? (response.message || response.error) : '未能触达 Gemini 网页';
+      errEl.innerHTML = `⚠️ <strong>发送失败</strong>：${escapeHtml(errText)}<br><small style="opacity:0.85; display:inline-block; margin-top:4px;">💡 提示：扩展已自动为您重新注入脚本并准备重连。请确认 <code>gemini.google.com</code> 网页处于打开状态，稍等 1 秒后重新发送即可。</small>`;
       chatMessages.appendChild(errEl);
       chatMessages.scrollTop = chatMessages.scrollHeight;
       saveCurrentSession();
