@@ -35,7 +35,12 @@ class Patcher {
 
   applyDiff(patchText, force = false) {
     const results = [];
-    const normalizedPatch = this.normalizeLineEndings(patchText);
+    let normalizedPatch = this.normalizeLineEndings(patchText);
+
+    // Clean up any glued code block language headers e.g. ".mdMarkdown#", ".mdMarkdown<<<<", ".jsJavaScript", etc.
+    normalizedPatch = normalizedPatch
+      .replace(/(\.[\w]{1,10})\s*(?:Markdown|markdown|JSON|json|Python|python|JavaScript|javascript|TypeScript|typescript|html|HTML|css|CSS|bash|sh|yaml|yml)(?=\s*[#<>\r\n])/g, '$1\n')
+      .replace(/(\.[\w]{1,10})Markdown(?=[^\w\s])/gi, '$1\n');
 
     // 1. Check for FILE_NEW: path/to/file
     // Format: FILE_NEW: <path>\n```\n<content>\n```

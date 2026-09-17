@@ -221,6 +221,27 @@ function checkIsGenerating() {
   return false;
 }
 
+function extractCleanGeminiText(rootEl) {
+  if (!rootEl) return '';
+  try {
+    const clone = rootEl.cloneNode(true);
+    // Remove copy buttons, action bars, toolbars, and code block headers (e.g. "Markdown")
+    clone.querySelectorAll(
+      'button, .copy-button, .code-block-decoration, .code-block-header, mat-icon, [role="button"]'
+    ).forEach(el => el.remove());
+
+    // Ensure code blocks have explicit newlines before and after
+    clone.querySelectorAll('pre, code-block, .code-block').forEach(el => {
+      el.insertAdjacentText('beforebegin', '\n\n');
+      el.insertAdjacentText('afterend', '\n\n');
+    });
+
+    return (clone.innerText || clone.textContent || '').trim();
+  } catch (e) {
+    return (rootEl.innerText || rootEl.textContent || '').trim();
+  }
+}
+
 function startStreamingObserver() {
   if (activeObserver) clearInterval(activeObserver);
   lastCapturedText = '';
@@ -244,7 +265,7 @@ function startStreamingObserver() {
     const latest = responseElements[responseElements.length - 1];
     const isGen = checkIsGenerating();
     
-    let text = (latest.innerText || latest.textContent || '').trim();
+    let text = extractCleanGeminiText(latest);
     
     const codeBlocks = [];
     latest.querySelectorAll('pre, code-block, pre code, .code-block').forEach(codeEl => {
