@@ -137,6 +137,7 @@ let activePickerChild = null;
 
 function runPowershellPicker(callback) {
   const scriptPath = path.join(__dirname, 'picker.ps1');
+  console.log('[Daemon] Launching PowerShell folder browser fallback:', scriptPath);
   const cmd = `powershell -NoProfile -STA -ExecutionPolicy Bypass -File "${scriptPath}"`;
   activePickerChild = exec(cmd, { encoding: 'utf8', windowsHide: false }, (err, stdout, stderr) => {
     activePickerChild = null;
@@ -145,6 +146,7 @@ function runPowershellPicker(callback) {
       return callback(err, null);
     }
     const selected = (stdout || '').trim();
+    console.log('[Daemon] Powershell picker returned:', selected);
     callback(null, selected || null);
   });
 }
@@ -158,17 +160,21 @@ function openNativeFolderPicker(callback) {
     }
 
     if (fs.existsSync(exePath)) {
+      console.log('[Daemon] Launching picker.exe:', exePath);
       activePickerChild = execFile(exePath, ['选择或新建项目文件夹 (New Project)'], { encoding: 'utf8', windowsHide: false }, (err, stdout, stderr) => {
         activePickerChild = null;
-        if (err && (err.code === 1 || err.code === 2)) {
-          // User clicked Cancel or closed dialog
-          return callback(null, null);
-        }
         if (err) {
-          console.error('[Daemon] Picker error, fallback to powershell:', err.message);
+          console.log(`[Daemon] picker.exe exited with code ${err.code}:`, stderr || err.message);
+          if (err.code === 1) {
+            // User explicitly cancelled or closed the dialog
+            return callback(null, null);
+          }
+          // Exception (code 2) or unexpected failure -> fallback to PowerShell
+          console.warn('[Daemon] picker.exe had an error, falling back to PowerShell dialog...');
           return runPowershellPicker(callback);
         }
         const selected = (stdout || '').trim();
+        console.log('[Daemon] picker.exe successfully selected:', selected);
         callback(null, selected || null);
       });
       return;

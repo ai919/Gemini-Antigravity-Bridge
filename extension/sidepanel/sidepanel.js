@@ -224,21 +224,54 @@ if (treeSearchInput) {
   });
 }
 
+let pickTimeoutTimer = null;
+
+function resetPickFolderBtn() {
+  if (pickTimeoutTimer) {
+    clearTimeout(pickTimeoutTimer);
+    pickTimeoutTimer = null;
+  }
+  pickFolderBtn.disabled = false;
+  pickFolderBtn.style.opacity = '1';
+  pickFolderBtn.style.pointerEvents = 'auto';
+  const pickMain = pickFolderBtn.querySelector('.btn-main-label');
+  if (pickMain) pickMain.innerText = '➕ 新建项目';
+  const pickSub = pickFolderBtn.querySelector('.btn-sub-label');
+  if (pickSub) pickSub.innerText = '选择本地目录或新建文件夹';
+}
+
 // Open Workspace Button (Native Windows Explorer Dialog)
 pickFolderBtn.addEventListener('click', () => {
+  console.log('[Sidepanel] pick-folder-btn clicked, ws status:', ws ? ws.readyState : 'no ws');
   if (!ws || ws.readyState !== WebSocket.OPEN) {
-    alert('本地守护进程 (Daemon) 尚未连接，请先启动 start-daemon.bat！');
+    const pickMain = pickFolderBtn.querySelector('.btn-main-label');
+    const pickSub = pickFolderBtn.querySelector('.btn-sub-label');
+    if (pickMain) pickMain.innerText = '⚠️ 守护进程未连接';
+    if (pickSub) pickSub.innerText = '正在重连... 请确认运行 start-daemon.bat';
+    connectDaemon();
+    setTimeout(resetPickFolderBtn, 3000);
     return;
   }
+
   const pickMain = pickFolderBtn.querySelector('.btn-main-label');
-  if (pickMain) pickMain.innerText = '请在系统窗口选择...';
   const pickSub = pickFolderBtn.querySelector('.btn-sub-label');
-  if (pickSub) pickSub.innerText = '正在等待系统选择文件夹...';
+  if (pickMain) pickMain.innerText = '📁 正在调起系统选择窗口...';
+  if (pickSub) pickSub.innerText = '若未弹出请查看任务栏高亮图标';
+  pickFolderBtn.disabled = true;
+  pickFolderBtn.style.opacity = '0.7';
+
+  // Safety fallback timer if dialog closes or hangs
+  if (pickTimeoutTimer) clearTimeout(pickTimeoutTimer);
+  pickTimeoutTimer = setTimeout(() => {
+    resetPickFolderBtn();
+  }, 45000);
+
   ws.send(JSON.stringify({ type: 'PICK_DIRECTORY' }));
 });
 
 addWsBtn.addEventListener('click', () => {
-  const targetPath = newWsInput.value.trim();
+  let targetPath = newWsInput.value.trim();
+  targetPath = targetPath.replace(/^["']|["']$/g, '').trim();
   if (!targetPath) return;
   if (!recentWorkspaces.some(p => pathEquals(p, targetPath))) {
     recentWorkspaces.unshift(targetPath);
@@ -248,6 +281,15 @@ addWsBtn.addEventListener('click', () => {
   newWsInput.value = '';
   closeDrawer();
 });
+
+if (newWsInput) {
+  newWsInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addWsBtn.click();
+    }
+  });
+}
 
 function requestWorkspacesTree() {
   if (currentWorkspace && currentWorkspace !== '未连接' && !recentWorkspaces.some(p => pathEquals(p, currentWorkspace))) {
@@ -747,18 +789,18 @@ function handleDaemonMessage(data) {
       break;
 
     case 'DIRECTORY_PICKED':
-      const pickMain = pickFolderBtn.querySelector('.btn-main-label');
-      if (pickMain) pickMain.innerText = '➕ 新建项目';
-      const pickSub = pickFolderBtn.querySelector('.btn-sub-label');
-      if (pickSub) pickSub.innerText = '选择本地目录或新建文件夹';
+      resetPickFolderBtn();
 
       if (data.success && data.path) {
+        console.log('[Sidepanel] Directory picked successfully:', data.path);
         if (!recentWorkspaces.some(p => pathEquals(p, data.path))) {
           recentWorkspaces.unshift(data.path);
           chrome.storage.local.set({ recent_workspaces: recentWorkspaces });
         }
         switchToWorkspace(data.path);
         closeDrawer();
+      } else {
+        console.log('[Sidepanel] Directory selection cancelled or empty');
       }
       break;
 

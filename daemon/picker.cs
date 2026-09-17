@@ -50,6 +50,12 @@ class Program {
         void Compare();
     }
 
+    [DllImport("user32.dll")]
+    static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    static extern bool SetForegroundWindow(IntPtr hWnd);
+
     [STAThread]
     static int Main(string[] args) {
         try {
@@ -61,7 +67,10 @@ class Program {
                 // FOS_PICKFOLDERS = 0x20, FOS_FORCEFILESYSTEM = 0x40
                 dialog.SetOptions(options | 0x00000020 | 0x00000040);
                 dialog.SetTitle(title);
-                int hr = dialog.Show(IntPtr.Zero);
+                dialog.SetOkButtonLabel("选择此文件夹");
+
+                IntPtr parent = GetForegroundWindow();
+                int hr = dialog.Show(parent);
                 if (hr == 0) {
                     IShellItem item;
                     dialog.GetResult(out item);
